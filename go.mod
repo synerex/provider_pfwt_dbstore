@@ -1,4 +1,4 @@
-module pfwt_objstorage
+module pfwt_dbstore
 
 go 1.15
 

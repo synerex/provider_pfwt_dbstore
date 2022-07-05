@@ -73,7 +73,7 @@ func objStore(bc string, ob string, dt string) {
 
 }
 
-// saveRecursive : save to objstorage recursive
+// saveRecursive : save to dbstore recursive
 func saveRecursive(client *sxutil.SXServiceClient) {
 	// ch := make(chan error)
 	for {
@@ -135,12 +135,12 @@ func main() {
 	flag.Parse()
 	go sxutil.HandleSigInt()
 	sxutil.RegisterDeferFunction(sxutil.UnRegisterNode)
-	log.Printf("PFWT-ObjStorage(%s) built %s sha1 %s", sxutil.GitVer, sxutil.BuildTime, sxutil.Sha1Ver)
+	log.Printf("PFWT-dbstore(%s) built %s sha1 %s", sxutil.GitVer, sxutil.BuildTime, sxutil.Sha1Ver)
 
 	channelTypes := []uint32{pbase.PEOPLE_WT_SVC, pbase.STORAGE_SERVICE}
 
 	var rerr error
-	sxServerAddress, rerr = sxutil.RegisterNode(*nodesrv, "PFWTObjStorage", channelTypes, nil)
+	sxServerAddress, rerr = sxutil.RegisterNode(*nodesrv, "PFWTdbstore", channelTypes, nil)
 
 	if rerr != nil {
 		log.Fatal("Can't register node:", rerr)
