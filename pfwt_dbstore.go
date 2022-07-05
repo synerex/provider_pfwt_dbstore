@@ -4,14 +4,16 @@ import (
 	// "encoding/json"
 	"flag"
 	"fmt"
-	"sort"
-	"strings"
+	"os"
 	"time"
+
+	"database/sql"
+
+	_ "github.com/go-sql-driver/mysql"
 
 	pflow "github.com/UCLabNU/proto_pflow"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
-	storage "github.com/synerex/proto_storage"
 	api "github.com/synerex/synerex_api"
 	pbase "github.com/synerex/synerex_proto"
 
@@ -42,92 +44,80 @@ var (
 	pfClient        *sxutil.SXServiceClient = nil
 	stClient        *sxutil.SXServiceClient = nil
 	pfblocks        map[string]*PFlowBlock  = map[string]*PFlowBlock{}
-	bucketName                              = flag.String("bucket", "centrair", "Bucket Name")
 	holdPeriod                              = flag.Int64("holdPeriod", 720, "Flow Data Hold Time")
+	db              *sql.DB
+	db_host         = os.Getenv("MYSQL_HOST")
+	db_name         = os.Getenv("MYSQL_DATABASE")
+	db_user         = os.Getenv("MYSQL_USER")
+	db_pswd         = os.Getenv("MYSQL_PASSWORD")
 )
 
 const layout = "2006-01-02T15:04:05.999999Z"
+const layout_db = "2006-01-02 15:04:05.999"
 
 func init() {
+	// connect
+	addr := fmt.Sprintf("%s:%s@(%s:3306)/%s", db_user, db_pswd, db_host, db_name)
+	print("connecting to " + addr + "\n")
+	db, err := sql.Open("mysql", addr)
+	if err != nil {
+		print("connection error: ")
+		print(err)
+		print("\n")
+	}
+
+	// ping
+	err = db.Ping()
+	if err != nil {
+		print("ping error: ")
+		print(err)
+		print("\n")
+	}
+
+	// create table
+	_, err = db.Exec(`create table if not exists pfwt(id BIGINT unsigned not null auto_increment, time DATETIME(3) not null, src INT unsigned not null, wt_data VARCHAR(256), primary key(id))`)
+	if err != nil {
+		print("exec error: ")
+		print(err)
+		print("\n")
+	}
 }
 
-func objStore(bc string, ob string, dt string) {
+func dbStore(ts time.Time, src uint32, wt_data string) {
 
-	log.Printf("Store %s, %s, %s", bc, ob, dt)
-	//  we need to send data into mbusID.
-	record := storage.Record{
-		BucketName: bc,
-		ObjectName: ob,
-		Record:     []byte(dt),
-		Option:     []byte("raw"),
-	}
-	out, err := proto.Marshal(&record)
-	if err == nil {
-		cont := &api.Content{Entity: out}
-		smo := sxutil.SupplyOpts{
-			Name:  "Record", // command
-			Cdata: cont,
-		}
-		stClient.NotifySupply(&smo)
-	}
+	log.Printf("Storeing %v, %s, %s", ts.Format(layout_db), src, wt_data)
+	result, err := db.Exec(`insert into pfwt(time, src, wt_data) values(?, ?, ?)`, ts.Format(layout_db), src, wt_data)
 
-}
-
-// saveRecursive : save to dbstore recursive
-func saveRecursive(client *sxutil.SXServiceClient) {
-	// ch := make(chan error)
-	for {
-		time.Sleep(time.Second * time.Duration(60))
-		currentTime := time.Now().Unix() + 9*3600
-		log.Printf("\nCurrent: %d", currentTime)
-		for name, pfblock := range pfblocks {
-			if pfblock.BaseDate+*holdPeriod < currentTime {
-				// data, err := json.Marshal(pfblock.PFlows)
-				csvData := []string{}
-				for _, pf := range pfblock.PFlows {
-					wt := fmt.Sprintf("%d", pf.Id)
-					for _, pc := range pf.Operation {
-						ts, _ := time.Parse(layout, ptypes.TimestampString(pc.Timestamp))
-						wt += fmt.Sprintf(",%s,%d,%d", ts.Format(layout), pc.Sid, pc.Height)
-					}
-					csvData = append(csvData, wt)
-				}
-
-				// if err == nil {
-				sort.Strings(csvData)
-				objStore(*bucketName, name, strings.Join(csvData, "\n")+"\n")
-				delete(pfblocks, name)
-				// 	} else {
-				// 		log.Printf("Error!!: %+v\n", err)
-				// 	}
-			}
+	if err != nil {
+		print("exec error: ")
+		print(err)
+		print("\n")
+	} else {
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			print(err)
+		} else {
+			print(rowsAffected)
 		}
 	}
+
 }
 
 // called for each agent data.
 func supplyPFlowCallback(clt *sxutil.SXServiceClient, sp *api.Supply) {
 
-	pc := &pflow.PFlow{}
+	pf := &pflow.PFlow{}
+	err := proto.Unmarshal(sp.Cdata.Entity, pf)
 
-	err := proto.Unmarshal(sp.Cdata.Entity, pc)
 	if err == nil { // get PFlow
-		tsd, _ := ptypes.Timestamp(pc.Operation[0].Timestamp)
-
-		// how to define Bucket:
-
-		// we use IP address for sensor_id
-		//		objectName := "area/year/month/date/hour/min"
-		objectName := fmt.Sprintf("%s/%s/%4d/%02d/%02d/%02d/%02d", "PFWT", pc.Area, tsd.Year(), tsd.Month(), tsd.Day(), tsd.Hour(), tsd.Minute())
-
-		if pfblock, exists := pfblocks[objectName]; exists {
-			pfblock.PFlows = append(pfblock.PFlows, pc)
-		} else {
-			pfblocks[objectName] = &PFlowBlock{
-				BaseDate: tsd.Unix(),
-				PFlows:   []*pflow.PFlow{pc},
-			}
+		wt := fmt.Sprintf("%d", pf.Id)
+		firstPc := pf.Operation[0]
+		firstTs, _ := time.Parse(layout, ptypes.TimestampString(firstPc.Timestamp))
+		for _, pc := range pf.Operation {
+			ts, _ := time.Parse(layout, ptypes.TimestampString(pc.Timestamp))
+			wt += fmt.Sprintf(",%s,%d,%d", ts.Format(layout), pc.Sid, pc.Height)
 		}
+		dbStore(firstTs, firstPc.Sid, wt)
 	}
 }
 
@@ -158,15 +148,12 @@ func main() {
 		log.Fatal("Can't connect Synerex Server")
 	}
 
-	stClient = sxutil.NewSXServiceClient(client, pbase.STORAGE_SERVICE, "{Client:PFWTObjStore}")
-	pfClient = sxutil.NewSXServiceClient(client, pbase.PEOPLE_WT_SVC, "{Client:PFWTObjStore}")
+	stClient = sxutil.NewSXServiceClient(client, pbase.STORAGE_SERVICE, "{Client:PFWTdbStore}")
+	pfClient = sxutil.NewSXServiceClient(client, pbase.PEOPLE_WT_SVC, "{Client:PFWTdbStore}")
 
 	log.Print("Subscribe PFlow Supply")
 	pcMu, pcLoop = sxutil.SimpleSubscribeSupply(pfClient, supplyPFlowCallback)
+
 	wg.Add(1)
-
-	go saveRecursive(pfClient)
-
 	wg.Wait()
-
 }
