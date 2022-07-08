@@ -59,7 +59,8 @@ func init() {
 	// connect
 	addr := fmt.Sprintf("%s:%s@(%s:3306)/%s", db_user, db_pswd, db_host, db_name)
 	print("connecting to " + addr + "\n")
-	db, err := sql.Open("mysql", addr)
+	var err error
+	db, err = sql.Open("mysql", addr)
 	if err != nil {
 		print("connection error: ")
 		print(err)
@@ -84,6 +85,23 @@ func init() {
 }
 
 func dbStore(ts time.Time, src uint32, wt_data string) {
+
+	// ping
+	err := db.Ping()
+	if err != nil {
+		print("ping error: ")
+		print(err)
+		print("\n")
+		// connect
+		addr := fmt.Sprintf("%s:%s@(%s:3306)/%s", db_user, db_pswd, db_host, db_name)
+		print("connecting to " + addr + "\n")
+		db, err = sql.Open("mysql", addr)
+		if err != nil {
+			print("connection error: ")
+			print(err)
+			print("\n")
+		}
+	}
 
 	log.Printf("Storeing %v, %s, %s", ts.Format(layout_db), src, wt_data)
 	result, err := db.Exec(`insert into pfwt(time, src, wt_data) values(?, ?, ?)`, ts.Format(layout_db), src, wt_data)
