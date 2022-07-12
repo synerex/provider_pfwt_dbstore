@@ -42,7 +42,6 @@ var (
 	mbusID          uint64                  = 0 // storage MBus ID
 	storageID       uint64                  = 0 // storageID
 	pfClient        *sxutil.SXServiceClient = nil
-	stClient        *sxutil.SXServiceClient = nil
 	pfblocks        map[string]*PFlowBlock  = map[string]*PFlowBlock{}
 	holdPeriod                              = flag.Int64("holdPeriod", 720, "Flow Data Hold Time")
 	db              *sql.DB
@@ -166,7 +165,6 @@ func main() {
 		log.Fatal("Can't connect Synerex Server")
 	}
 
-	stClient = sxutil.NewSXServiceClient(client, pbase.STORAGE_SERVICE, "{Client:PFWTdbStore}")
 	pfClient = sxutil.NewSXServiceClient(client, pbase.PEOPLE_WT_SVC, "{Client:PFWTdbStore}")
 
 	log.Print("Subscribe PFlow Supply")
