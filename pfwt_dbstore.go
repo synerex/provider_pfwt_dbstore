@@ -63,7 +63,7 @@ func init() {
 	if err != nil {
 		print("connection error: ")
 		print(err)
-		print("\n")
+		log.Fatal("\n")
 	}
 
 	// ping
@@ -71,15 +71,15 @@ func init() {
 	if err != nil {
 		print("ping error: ")
 		print(err)
-		print("\n")
+		log.Fatal("\n")
 	}
 
 	// create table
 	_, err = db.Exec(`create table if not exists pfwt(id BIGINT unsigned not null auto_increment, time DATETIME(3) not null, src INT unsigned not null, wt_data VARCHAR(256), primary key(id))`)
 	if err != nil {
-		print("exec error: ")
+		print("create table error: ")
 		print(err)
-		print("\n")
+		log.Fatal("\n")
 	}
 }
 
