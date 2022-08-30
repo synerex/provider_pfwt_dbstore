@@ -62,7 +62,7 @@ func init() {
 	db, err = sql.Open("mysql", addr)
 	if err != nil {
 		print("connection error: ")
-		print(err)
+		log.Println(err)
 		log.Fatal("\n")
 	}
 
@@ -70,7 +70,7 @@ func init() {
 	err = db.Ping()
 	if err != nil {
 		print("ping error: ")
-		print(err)
+		log.Println(err)
 		log.Fatal("\n")
 	}
 
@@ -78,7 +78,7 @@ func init() {
 	_, err = db.Exec(`create table if not exists pfwt(id BIGINT unsigned not null auto_increment, time DATETIME(3) not null, src INT unsigned not null, wt_data VARCHAR(256), primary key(id))`)
 	if err != nil {
 		print("create table error: ")
-		print(err)
+		log.Println(err)
 		log.Fatal("\n")
 	}
 }
@@ -89,7 +89,7 @@ func dbStore(ts time.Time, src uint32, wt_data string) {
 	err := db.Ping()
 	if err != nil {
 		print("ping error: ")
-		print(err)
+		log.Println(err)
 		print("\n")
 		// connect
 		addr := fmt.Sprintf("%s:%s@(%s:3306)/%s", db_user, db_pswd, db_host, db_name)
@@ -97,7 +97,7 @@ func dbStore(ts time.Time, src uint32, wt_data string) {
 		db, err = sql.Open("mysql", addr)
 		if err != nil {
 			print("connection error: ")
-			print(err)
+			log.Println(err)
 			print("\n")
 		}
 	}
@@ -107,12 +107,12 @@ func dbStore(ts time.Time, src uint32, wt_data string) {
 
 	if err != nil {
 		print("exec error: ")
-		print(err)
+		log.Println(err)
 		print("\n")
 	} else {
 		rowsAffected, err := result.RowsAffected()
 		if err != nil {
-			print(err)
+			log.Println(err)
 		} else {
 			print(rowsAffected)
 		}
