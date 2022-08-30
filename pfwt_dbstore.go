@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
 	"time"
 
 	"database/sql"
@@ -134,7 +135,8 @@ func supplyPFlowCallback(clt *sxutil.SXServiceClient, sp *api.Supply) {
 			ts, _ := time.Parse(layout, ptypes.TimestampString(pc.Timestamp))
 			wt += fmt.Sprintf(",%s,%d,%d", ts.Format(layout), pc.Sid, pc.Height)
 		}
-		dbStore(firstTs, firstPc.Sid, wt)
+		src, _ := strconv.Atoi(pf.Area)
+		dbStore(firstTs, uint32(src), wt)
 	}
 }
 
