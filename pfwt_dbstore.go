@@ -2,19 +2,19 @@ package main
 
 import (
 	// "encoding/json"
+	"context"
 	"flag"
 	"fmt"
 	"os"
 	"strconv"
 	"time"
 
-	"database/sql"
-
 	_ "github.com/go-sql-driver/mysql"
 
 	pflow "github.com/UCLabNU/proto_pflow"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
+	"github.com/jackc/pgx/v4"
 	api "github.com/synerex/synerex_api"
 	pbase "github.com/synerex/synerex_proto"
 
@@ -45,11 +45,11 @@ var (
 	pfClient        *sxutil.SXServiceClient = nil
 	pfblocks        map[string]*PFlowBlock  = map[string]*PFlowBlock{}
 	holdPeriod                              = flag.Int64("holdPeriod", 720, "Flow Data Hold Time")
-	db              *sql.DB
-	db_host         = os.Getenv("MYSQL_HOST")
-	db_name         = os.Getenv("MYSQL_DATABASE")
-	db_user         = os.Getenv("MYSQL_USER")
-	db_pswd         = os.Getenv("MYSQL_PASSWORD")
+	db              *pgx.Conn
+	db_host         = os.Getenv("POSTGRES_HOST")
+	db_name         = os.Getenv("POSTGRES_DB")
+	db_user         = os.Getenv("POSTGRES_USER")
+	db_pswd         = os.Getenv("POSTGRES_PASSWORD")
 )
 
 const layout = "2006-01-02T15:04:05.999999Z"
@@ -57,18 +57,20 @@ const layout_db = "2006-01-02 15:04:05.999"
 
 func init() {
 	// connect
-	addr := fmt.Sprintf("%s:%s@(%s:3306)/%s", db_user, db_pswd, db_host, db_name)
+	ctx := context.Background()
+	addr := fmt.Sprintf("postgres://%s:%s@%s:5432/%s", db_user, db_pswd, db_host, db_name)
 	print("connecting to " + addr + "\n")
 	var err error
-	db, err = sql.Open("mysql", addr)
+	db, err = pgx.Connect(ctx, addr)
 	if err != nil {
 		print("connection error: ")
 		log.Println(err)
 		log.Fatal("\n")
 	}
+	defer db.Close(ctx)
 
 	// ping
-	err = db.Ping()
+	err = db.Ping(ctx)
 	if err != nil {
 		print("ping error: ")
 		log.Println(err)
@@ -76,7 +78,7 @@ func init() {
 	}
 
 	// create table
-	_, err = db.Exec(`create table if not exists pfwt(id BIGINT unsigned not null auto_increment, time DATETIME(3) not null, src INT unsigned not null, wt_data VARCHAR(256), primary key(id))`)
+	_, err = db.Exec(ctx, `create table if not exists pfwt(id BIGSERIAL NOT NULL, time TIMESTAMP not null, src INT not null, wt_data VARCHAR(256), primary key(id))`)
 	if err != nil {
 		print("create table error: ")
 		log.Println(err)
@@ -87,15 +89,16 @@ func init() {
 func dbStore(ts time.Time, src uint32, wt_data string) {
 
 	// ping
-	err := db.Ping()
+	ctx := context.Background()
+	err := db.Ping(ctx)
 	if err != nil {
 		print("ping error: ")
 		log.Println(err)
 		print("\n")
 		// connect
-		addr := fmt.Sprintf("%s:%s@(%s:3306)/%s", db_user, db_pswd, db_host, db_name)
+		addr := fmt.Sprintf("postgres://%s:%s@%s:5432/%s", db_user, db_pswd, db_host, db_name)
 		print("connecting to " + addr + "\n")
-		db, err = sql.Open("mysql", addr)
+		db, err = pgx.Connect(ctx, addr)
 		if err != nil {
 			print("connection error: ")
 			log.Println(err)
@@ -104,14 +107,14 @@ func dbStore(ts time.Time, src uint32, wt_data string) {
 	}
 
 	log.Printf("Storeing %v, %s, %s", ts.Format(layout_db), src, wt_data)
-	result, err := db.Exec(`insert into pfwt(time, src, wt_data) values(?, ?, ?)`, ts.Format(layout_db), src, wt_data)
+	result, err := db.Exec(ctx, `insert into pfwt(time, src, wt_data) values($1, $2, $3)`, ts.Format(layout_db), src, wt_data)
 
 	if err != nil {
 		print("exec error: ")
 		log.Println(err)
 		print("\n")
 	} else {
-		rowsAffected, err := result.RowsAffected()
+		rowsAffected := result.RowsAffected()
 		if err != nil {
 			log.Println(err)
 		} else {
