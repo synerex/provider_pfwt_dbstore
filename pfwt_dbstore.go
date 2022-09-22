@@ -14,7 +14,7 @@ import (
 	pflow "github.com/UCLabNU/proto_pflow"
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes"
-	"github.com/jackc/pgx/v4"
+	"github.com/jackc/pgx/v4/pgxpool"
 	api "github.com/synerex/synerex_api"
 	pbase "github.com/synerex/synerex_proto"
 
@@ -45,7 +45,7 @@ var (
 	pfClient        *sxutil.SXServiceClient = nil
 	pfblocks        map[string]*PFlowBlock  = map[string]*PFlowBlock{}
 	holdPeriod                              = flag.Int64("holdPeriod", 720, "Flow Data Hold Time")
-	db              *pgx.Conn
+	db              *pgxpool.Pool
 	db_host         = os.Getenv("POSTGRES_HOST")
 	db_name         = os.Getenv("POSTGRES_DB")
 	db_user         = os.Getenv("POSTGRES_USER")
@@ -61,13 +61,13 @@ func init() {
 	addr := fmt.Sprintf("postgres://%s:%s@%s:5432/%s", db_user, db_pswd, db_host, db_name)
 	print("connecting to " + addr + "\n")
 	var err error
-	db, err = pgx.Connect(ctx, addr)
+	db, err = pgxpool.Connect(ctx, addr)
 	if err != nil {
 		print("connection error: ")
 		log.Println(err)
 		log.Fatal("\n")
 	}
-	defer db.Close(ctx)
+	defer db.Close()
 
 	// ping
 	err = db.Ping(ctx)
@@ -98,7 +98,7 @@ func dbStore(ts time.Time, src uint32, wt_data string) {
 		// connect
 		addr := fmt.Sprintf("postgres://%s:%s@%s:5432/%s", db_user, db_pswd, db_host, db_name)
 		print("connecting to " + addr + "\n")
-		db, err = pgx.Connect(ctx, addr)
+		db, err = pgxpool.Connect(ctx, addr)
 		if err != nil {
 			print("connection error: ")
 			log.Println(err)
