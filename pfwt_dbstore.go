@@ -78,7 +78,7 @@ func init() {
 	}
 
 	// create table
-	_, err = db.Exec(ctx, `create table if not exists pfwt(id BIGSERIAL NOT NULL, time TIMESTAMP not null, src INT not null, wt_data VARCHAR(256), primary key(id))`)
+	_, err = db.Exec(ctx, `create table if not exists pfwt(id BIGSERIAL NOT NULL, time TIMESTAMP not null, src INT not null, wt_data VARCHAR(256), primary key(id), constraint pfwt_pk unique (time, src, wt_data))`)
 	if err != nil {
 		print("create table error: ")
 		log.Println(err)
